@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Filtros superiores -->
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <label for="selectSucursal" class="form-label fw-bold">Seleccionar Sucursal:</label>
+            <select id="selectSucursal" class="form-select">
+                <option value="">-- Seleccione una sucursal --</option>
+                {% for sucursal in sucursales %}
+                <option value="{{ sucursal }}">{{ sucursal }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label for="inputCostoKm" class="form-label fw-bold">Costo por km (CLP):</label>
+            <input type="number" id="inputCostoKm" class="form-control" value="500" min="0" step="10">
+        </div>
+        <div class="col-md-7">
+            <!-- Leyenda compacta horizontal -->
+            <label class="form-label fw-bold">Leyenda del Mapa:</label>
+            <div class="d-flex gap-3 align-items-center flex-wrap">
+                <div class="d-flex align-items-center">
+                    <img src="{{ url_for('static', filename='img/marker-icon-2x-blue.png') }}" alt="Cliente" style="width:18px;height:30px;">
+                    <small class="ms-1">Cliente</small>
+                </div>
+                <div class="d-flex align-items-center">
+                    <img src="{{ url_for('static', filename='img/marker-icon-2x-orange.png') }}" alt="Sucursal real" style="width:18px;height:30px;">
+                    <small class="ms-1">Sucursal real</small>
+                </div>
+                <div class="d-flex align-items-center">
+                    <img src="{{ url_for('static', filename='img/marker-icon-2x-green.png') }}" alt="Óptimo sugerido" style="width:18px;height:30px;">
+                    <small class="ms-1">Óptimo sugerido</small>
+                </div>
+                <div class="d-flex align-items-center">
+                    <img src="{{ url_for('static', filename='img/marker-icon-2x-red.png') }}" alt="Sucursal consultada" style="width:18px;height:30px;">
+                    <small class="ms-1">Consultado</small>
+                </div>
+            </div>
+            <!-- Upload maestros -->
+            <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
+                <div class="input-group input-group-sm me-2" style="width: 320px;">
+                    <input class="form-control form-control-sm" id="fileClientesInput" type="file" accept=".csv">
+                    <button class="btn btn-outline-primary" id="btnUploadClientes" type="button">Cargar Clientes (.csv)</button>
+                </div>
+                <small class="text-muted ms-2">Al subir, los clientes se procesan temporalmente en memoria.</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mapa y Panel de Resultados -->
+    <div class="row">
+        <!-- Columna del Mapa -->
+        <div class="col-lg-9">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Mapa Interactivo</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="map"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Columna del Panel de Resultados -->
+        <div class="col-lg-3">
+            <div class="card h-100">
+                <div class="card-header bg-secondary text-white py-2">
+                    <h6 class="mb-0">Resultados del Análisis</h6>
+                </div>
+                <div class="card-body overflow-auto" style="max-height: 650px;">
+                    <!-- Información de la sucursal -->
+                    <div id="infoSucursal" class="mb-2">
+                        <h6 class="text-muted small mb-1">Sucursal seleccionada:</h6>
+                        <p id="nombreSucursal" class="fw-bold mb-1">-</p>
+                        <p id="numClientes" class="text-muted small mb-0">0 clientes</p>
+                    </div>
+
+                    <hr class="my-2">
+
+                    <!-- Resultados del punto clicado -->
+                    <div id="resultadosAnalisis" style="display: none;">
+                        <h6 class="text-primary mb-2 small">📍 Punto Consultado</h6>
+                        
+                        <div class="mb-2">
+                            <small class="text-muted d-block">Coordenadas:</small>
+                            <p class="mb-1 small" id="coordenadasPunto">-</p>
+                        </div>
+
+                        <div class="row mb-2">
+                            <div class="col-6">
+                                <small class="text-muted d-block">Dist. Promedio:</small>
+                                <p class="fw-bold text-primary mb-0 small" id="distanciaPromedio">-</p>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Costo Promedio:</small>
+                                <p class="fw-bold text-primary mb-0 small" id="costoPromedio">-</p>
+                            </div>
+                        </div>
+
+                        <hr class="my-2">
+
+                        <!-- Métricas comparativas con sucursal real -->
+                        <div id="metricasReal" style="display: none;">
+                            <h6 class="text-warning mb-2 small">
+                                📊 Comparación con Sucursal Actual
+                                <i class="bi bi-info-circle ms-1" style="cursor: help;" 
+                                   title="Compara el punto consultado con la ubicación real actual de la sucursal. Muestra si la nueva propuesta sería mejor o peor que la ubicación existente."></i>
+                            </h6>
+                            
+                            <div class="alert alert-light py-1 px-2 mb-2">
+                                <div class="row g-1">
+                                    <div class="col-6">
+                                        <small class="text-muted d-block" style="font-size: 0.75rem;">Dist. actual:</small>
+                                        <strong style="font-size: 0.8rem;" id="distanciaReal">-</strong>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted d-block" style="font-size: 0.75rem;">Separación:</small>
+                                        <strong style="font-size: 0.8rem;" id="distanciaConsultadoReal">-</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-2">
+                                <small class="text-muted d-block" style="font-size: 0.8rem;">Mejora distancia:</small>
+                                <p class="mb-0 small" id="mejoraDistancia">-</p>
+                            </div>
+
+                            <div class="mb-2">
+                                <small class="text-muted d-block" style="font-size: 0.8rem;">Ahorro costo:</small>
+                                <p class="mb-0 small" id="ahorroCosto">-</p>
+                            </div>
+
+                            <div class="mb-2">
+                                <small class="text-muted d-block" style="font-size: 0.8rem;">Clientes más cercanos:</small>
+                                <div class="progress" style="height: 18px;">
+                                    <div class="progress-bar bg-danger" id="barraNuevaUbicacion" style="width: 50%">
+                                        <small style="font-size: 0.7rem;" id="textoNuevaUbicacion">50%</small>
+                                    </div>
+                                    <div class="progress-bar bg-warning" id="barraUbicacionActual" style="width: 50%">
+                                        <small style="font-size: 0.7rem;" id="textoUbicacionActual">50%</small>
+                                    </div>
+                                </div>
+                                <small class="text-muted" style="font-size: 0.7rem;">
+                                    <span class="badge bg-danger">Nueva</span> vs 
+                                    <span class="badge bg-warning">Actual</span>
+                                </small>
+                            </div>
+                        </div>
+
+                        <hr class="my-2">
+
+                        <!-- Métricas comparativas con óptimo -->
+                        <div id="metricasOptimo" style="display: none;">
+                            <h6 class="text-success mb-2 small">
+                                🎯 Comparación con Ubicación Óptima
+                                <i class="bi bi-info-circle ms-1" style="cursor: help;" 
+                                   title="Compara el punto consultado con la ubicación matemáticamente óptima calculada mediante el algoritmo de Weiszfeld (geometric median). Este punto minimiza la distancia total a todos los clientes."></i>
+                            </h6>
+                            
+                            <div class="alert alert-light py-1 px-2 mb-2">
+                                <div class="row g-1">
+                                    <div class="col-6">
+                                        <small class="text-muted d-block" style="font-size: 0.75rem;">Dist. óptima:</small>
+                                        <strong style="font-size: 0.8rem;" id="distanciaOptimo">-</strong>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted d-block" style="font-size: 0.75rem;">Separación:</small>
+                                        <strong style="font-size: 0.8rem;" id="distanciaConsultadoOptimo">-</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-2">
+                                <small class="text-muted d-block" style="font-size: 0.8rem;">Diferencia vs óptimo:</small>
+                                <p class="mb-0 small" id="diferenciaOptimo">-</p>
+                            </div>
+                        </div>
+
+                        <hr class="my-2">
+
+                        <button id="btnExportar" class="btn btn-primary btn-sm w-100">
+                            📥 Descargar CSV
+                        </button>
+                    </div>
+
+                    <div id="mensajeInicial" class="text-center text-muted py-3">
+                        <small>Seleccione una sucursal y haga clic en el mapa para analizar una ubicación.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Detalle -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Detalle por Cliente</h5>
+                </div>
+                <div class="card-body">
+                    <div id="contenedorTabla" style="display: none;">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover table-sm" id="tablaDetalle">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Cod Local</th>
+                                        <th>Local</th>
+                                        <th>Zona Reparto</th>
+                                        <th>Latitud</th>
+                                        <th>Longitud</th>
+                                        <th>Distancia (km)</th>
+                                        <th>Costo Estimado (CLP)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cuerpoTablaDetalle">
+                                    <!-- Filas se llenarán dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div id="mensajeTablaVacia" class="text-center text-muted py-4">
+                        <p>No hay datos para mostrar. Haga clic en el mapa para generar el análisis.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% endblock %}
